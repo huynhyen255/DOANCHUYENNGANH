@@ -20,7 +20,7 @@ st.markdown("""
     """, unsafe_allow_html=True)
 
 st.title("🛡️ Ứng dụng Phân loại Tin nhắn Spam")
-st.write("Đồ án Chuyên Ngành - Công nghệ Machine Learning")
+st.write("Đồ án Chuyên Ngành ")
 
 # --- HÀM XỬ LÝ DỮ LIỆU ---
 @st.cache_resource
@@ -65,7 +65,7 @@ with col1:
 
 with col2:
     st.subheader("📊 Thông số học máy")
-    st.success("🤖 Mô hình: Gaussian Naive Bayes")
+    st.success("🤖 Mô hình: Naive Bayes và Cơ sở dữ liệu vector ")
     st.info(f"📁 Từ điển: {len(dictionary)} đặc trưng")
     st.warning("🌐 Ngôn ngữ: Anh - Việt")
 
