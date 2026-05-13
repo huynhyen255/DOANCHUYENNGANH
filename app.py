@@ -14,28 +14,74 @@ st.set_page_config(page_title="AI Spam Shield Pro", page_icon="🛡️", layout=
 st.markdown("""
     <style>
     .main { background-color: #f5f7f9; }
-    .stButton>button { width: 100%; border-radius: 20px; height: 3em; background-color: #ff4b4b; color: white; }
-    .prediction-box { padding: 20px; border-radius: 15px; text-align: center; font-size: 24px; font-weight: bold; }
+    .stButton>button { width: 100%; border-radius: 20px; height: 3.5em; background-color: #ff4b4b; color: white; font-weight: bold; }
+    .prediction-box { padding: 25px; border-radius: 15px; text-align: center; font-size: 26px; font-weight: bold; box-shadow: 0px 4px 10px rgba(0,0,0,0.1); }
     </style>
     """, unsafe_allow_html=True)
 
 st.title("🛡️ Ứng dụng Phân loại Tin nhắn Spam")
-st.write("Đồ án Chuyên Ngành - Nâng cấp bởi AI: Tích hợp Tiếng Anh & Tiếng Việt")
+st.write("Đồ án Chuyên Ngành - Công nghệ Machine Learning (Naive Bayes)")
 
-# --- HIỂN THỊ KẾT QUẢ (Bản sửa lỗi Bias) ---
+# --- HÀM XỬ LÝ DỮ LIỆU (Giữ nguyên logic học máy) ---
+@st.cache_resource
+def load_trained_model():
+    nltk.download("stopwords")
+    nltk.download("punkt")
+    df = pd.read_csv("2cls_spam_text_cls.csv")
+    
+    def preprocess(text):
+        text = str(text).lower().translate(str.maketrans("", "", string.punctuation))
+        tokens = nltk.word_tokenize(text)
+        stop_words = set(stopwords.words("english"))
+        tokens = [t for t in tokens if t not in stop_words]
+        return [PorterStemmer().stem(t) for t in tokens]
+
+    processed_msgs = [preprocess(msg) for msg in df["Message"]]
+    dictionary = list(set([word for sublist in processed_msgs for word in sublist]))
+
+    def get_feats(tokens):
+        features = np.zeros(len(dictionary))
+        for t in tokens:
+            if t in dictionary: features[dictionary.index(t)] += 1
+        return features
+
+    X = np.array([get_feats(t) for t in processed_msgs])
+    le = LabelEncoder()
+    y = le.fit_transform(df["Category"])
+    
+    model = GaussianNB()
+    model.fit(X, y)
+    return model, dictionary, le, preprocess, get_feats
+
+model, dictionary, le, preprocess_fn, feat_fn = load_trained_model()
+
+# --- GIAO DIỆN CHÍNH ---
+col1, col2 = st.columns([2, 1])
+
+with col1:
+    st.subheader("📝 Phân tích nội dung")
+    user_input = st.text_area("Nhập tin nhắn (Anh/Việt):", height=180, placeholder="Dán tin nhắn cần kiểm tra vào đây...")
+    btn_click = st.button("🚀 BẮT ĐẦU PHÂN TÍCH")
+
+with col2:
+    st.subheader("📊 Thông số học máy")
+    st.info(f"📁 Từ điển: {len(dictionary)} đặc trưng")
+    st.success("🤖 Mô hình: Gaussian Naive Bayes")
+    st.warning("🌐 Ngôn ngữ: Anh - Việt")
+
+# --- XỬ LÝ KẾT QUẢ (Đã gộp điều kiện lọc 95% và độ dài) ---
 if btn_click:
     if user_input:
         with st.spinner('Đang phân tích xác suất...'):
             tokens = preprocess_fn(user_input)
             features = feat_fn(tokens)
             
+            # Dự đoán xác suất từ mô hình
             prob = model.predict_proba([features])[0]
             raw_prediction = le.inverse_transform([np.argmax(prob)])[0]
             confidence = max(prob) * 100
             
-            # --- ĐIỀU KIỆN LỌC BỔ SUNG ---
-            # 1. Nếu độ tin cậy thấp hơn 95%
-            # 2. Hoặc tin nhắn quá ngắn (dưới 15 ký tự)
+            # --- TẦNG LỌC BIAS (SỬA LỖI "CHÚC MỪNG") ---
             if confidence < 95 or len(user_input.strip()) < 15:
                 final_prediction = 'ham'
             else:
@@ -44,50 +90,24 @@ if btn_click:
             st.markdown("---")
             if final_prediction == 'spam':
                 st.markdown(f'<div class="prediction-box" style="background-color: #ffebee; color: #c62828;">⚠️ CẢNH BÁO: TIN NHẮN RÁC ({confidence:.1f}%)</div>', unsafe_allow_html=True)
-                st.write("**Ghi chú:** Hệ thống phát hiện các dấu hiệu quảng cáo hoặc lừa đảo rõ rệt.")
+                st.warning("**Lời khuyên:** Hệ thống phát hiện dấu hiệu quảng cáo hoặc lừa đảo. Không nhấn vào link lạ.")
             else:
-                # Nếu máy đoán là Spam nhưng bị điều kiện phụ chặn lại, ta báo là An toàn
                 st.markdown(f'<div class="prediction-box" style="background-color: #e8f5e9; color: #2e7d32;">✅ AN TOÀN: TIN NHẮN THƯỜNG ({confidence:.1f}%)</div>', unsafe_allow_html=True)
                 st.balloons()
+                # Chú thích nhỏ nếu máy có nghi ngờ nhưng bị bộ lọc chặn lại
                 if confidence > 50 and raw_prediction == 'spam':
-                    st.caption("ℹ️ *Lưu ý: Tin nhắn có một vài từ khóa nhạy cảm nhưng chưa đủ cơ sở để kết luận là Spam.*")
-    else:
-        st.error("Vui lòng nhập nội dung để phân tích!")
-
-# --- GIAO DIỆN CHÍNH ---
-col1, col2 = st.columns([2, 1])
-
-with col1:
-    st.subheader("📝 Phân tích nội dung")
-    user_input = st.text_area("Nhập tin nhắn (Anh/Việt):", height=200, placeholder="Nhập tin nhắn cần kiểm tra tại đây...")
-
-with col2:
-    st.subheader("📊 Thông số học máy")
-    st.success("Mô hình: Naive Bayes và cơ sở dữ liệu vector")
-
-if st.button("🚀 BẮT ĐẦU PHÂN TÍCH"):
-    if user_input:
-        with st.spinner('Đang phân tích xác suất...'):
-            tokens = preprocess_fn(user_input)
-            features = feat_fn(tokens)
-            
-            # Dự đoán xác suất
-            prob = model.predict_proba([features])[0]
-            prediction = le.inverse_transform([np.argmax(prob)])[0]
-            confidence = max(prob) * 100
-
-            st.markdown("---")
-            if prediction == 'spam':
-                st.markdown(f'<div class="prediction-box" style="background-color: #ffebee; color: #c62828;">⚠️ CẢNH BÁO: TIN NHẮN RÁC ({confidence:.2f}%)</div>', unsafe_allow_html=True)
-                st.warning("Lời khuyên: Không nhấn vào bất kỳ đường link nào trong tin nhắn này.")
-            else:
-                st.markdown(f'<div class="prediction-box" style="background-color: #e8f5e9; color: #2e7d32;">✅ AN TOÀN: TIN NHẮN THƯỜNG ({confidence:.2f}%)</div>', unsafe_allow_html=True)
-                st.balloons()
+                    st.caption("ℹ️ *Lưu ý: Tin nhắn chứa một số từ khóa nhạy cảm nhưng chưa đủ cơ sở để kết luận là Spam.*")
     else:
         st.error("Vui lòng nhập nội dung!")
 
+# --- THANH BÊN (Sidebar) ---
 st.sidebar.image("https://cdn-icons-png.flaticon.com/512/179/179543.png", width=100)
 st.sidebar.title("Quản lý Đồ án")
-st.sidebar.write("**Sinh viên:** Huỳnh Lê Hoàng Yến 022101091")  
-st.sidebar.write("**Sinh viên:** Phạm Minh Tuấn 022101006")  
-st.sidebar.write("**Sinh viên:** Huỳnh Văn Đăng Khoa 022101111")
+st.sidebar.markdown(f"""
+**Nhóm sinh viên thực hiện:**
+* **Huỳnh Lê Hoàng Yến** - 022101091
+* **Phạm Minh Tuấn** - 022101006
+* **Huỳnh Văn Đăng Khoa** - 022101111
+---
+**Ngày bảo vệ:** 14/05/2026
+""")
