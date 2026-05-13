@@ -20,9 +20,9 @@ st.markdown("""
     """, unsafe_allow_html=True)
 
 st.title("🛡️ Ứng dụng Phân loại Tin nhắn Spam")
-st.write("Đồ án Chuyên Ngành )")
+st.write("Đồ án Chuyên Ngành - Công nghệ Machine Learning (Naive Bayes)")
 
-# --- HÀM XỬ LÝ DỮ LIỆU (Giữ nguyên logic học máy) ---
+# --- HÀM XỬ LÝ DỮ LIỆU ---
 @st.cache_resource
 def load_trained_model():
     nltk.download("stopwords")
@@ -60,27 +60,27 @@ col1, col2 = st.columns([2, 1])
 
 with col1:
     st.subheader("📝 Phân tích nội dung")
-    user_input = st.text_area("Nhập tin nhắn (Anh/Việt):", height=180, placeholder="Dán tin nhắn cần kiểm tra vào đây...")
+    user_input = st.text_area("Nhập tin nhắn (Anh/Việt):", height=180, placeholder="Dán tin nhắn cần kiểm tra tại đây...")
     btn_click = st.button("🚀 BẮT ĐẦU PHÂN TÍCH")
 
 with col2:
     st.subheader("📊 Thông số học máy")
-    st.success("🤖 Mô hình: Naive Bayes và cơ sở dữ liệu vector")
+    st.success("🤖 Mô hình: Gaussian Naive Bayes")
+    st.info(f"📁 Từ điển: {len(dictionary)} đặc trưng")
     st.warning("🌐 Ngôn ngữ: Anh - Việt")
 
-# --- XỬ LÝ KẾT QUẢ (Đã gộp điều kiện lọc 95% và độ dài) ---
+# --- XỬ LÝ KẾT QUẢ ---
 if btn_click:
     if user_input:
         with st.spinner('Đang phân tích xác suất...'):
             tokens = preprocess_fn(user_input)
             features = feat_fn(tokens)
             
-            # Dự đoán xác suất từ mô hình
             prob = model.predict_proba([features])[0]
             raw_prediction = le.inverse_transform([np.argmax(prob)])[0]
             confidence = max(prob) * 100
             
-            # --- TẦNG LỌC BIAS (SỬA LỖI "CHÚC MỪNG") ---
+            # TẦNG LỌC BIAS
             if confidence < 95 or len(user_input.strip()) < 15:
                 final_prediction = 'ham'
             else:
@@ -93,7 +93,6 @@ if btn_click:
             else:
                 st.markdown(f'<div class="prediction-box" style="background-color: #e8f5e9; color: #2e7d32;">✅ AN TOÀN: TIN NHẮN THƯỜNG ({confidence:.1f}%)</div>', unsafe_allow_html=True)
                 st.balloons()
-                # Chú thích nhỏ nếu máy có nghi ngờ nhưng bị bộ lọc chặn lại
                 if confidence > 50 and raw_prediction == 'spam':
                     st.caption("ℹ️ *Lưu ý: Tin nhắn chứa một số từ khóa nhạy cảm nhưng chưa đủ cơ sở để kết luận là Spam.*")
     else:
@@ -107,3 +106,6 @@ st.sidebar.markdown(f"""
 * **Huỳnh Lê Hoàng Yến** - 022101091
 * **Phạm Minh Tuấn** - 022101006
 * **Huỳnh Văn Đăng Khoa** - 022101111
+
+**Ngày bảo vệ:** 14/05/2026
+""")
