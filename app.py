@@ -22,38 +22,37 @@ st.markdown("""
 st.title("🛡️ Ứng dụng Phân loại Tin nhắn Spam")
 st.write("Đồ án Chuyên Ngành - Nâng cấp bởi AI: Tích hợp Tiếng Anh & Tiếng Việt")
 
-# --- HÀM XỬ LÝ (Nâng cấp hỗ trợ đa ngôn ngữ nhẹ) ---
-@st.cache_resource
-def load_trained_model():
-    nltk.download("stopwords")
-    nltk.download("punkt")
-    df = pd.read_csv("2cls_spam_text_cls.csv")
-    
-    def preprocess(text):
-        text = str(text).lower().translate(str.maketrans("", "", string.punctuation))
-        # Nếu là tiếng Việt (kiểm tra dấu hoặc từ phổ biến), ta không lọc stopword tiếng Anh
-        tokens = nltk.word_tokenize(text)
-        # Tạm thời bỏ lọc stopword để máy học cả cụm từ tiếng Việt
-        return [PorterStemmer().stem(t) for t in tokens]
+# --- HIỂN THỊ KẾT QUẢ (Bản sửa lỗi Bias) ---
+if btn_click:
+    if user_input:
+        with st.spinner('Đang phân tích xác suất...'):
+            tokens = preprocess_fn(user_input)
+            features = feat_fn(tokens)
+            
+            prob = model.predict_proba([features])[0]
+            raw_prediction = le.inverse_transform([np.argmax(prob)])[0]
+            confidence = max(prob) * 100
+            
+            # --- ĐIỀU KIỆN LỌC BỔ SUNG ---
+            # 1. Nếu độ tin cậy thấp hơn 95%
+            # 2. Hoặc tin nhắn quá ngắn (dưới 15 ký tự)
+            if confidence < 95 or len(user_input.strip()) < 15:
+                final_prediction = 'ham'
+            else:
+                final_prediction = raw_prediction
 
-    processed_msgs = [preprocess(msg) for msg in df["Message"]]
-    dictionary = list(set([word for sublist in processed_msgs for word in sublist]))
-
-    def get_feats(tokens):
-        features = np.zeros(len(dictionary))
-        for t in tokens:
-            if t in dictionary: features[dictionary.index(t)] += 1
-        return features
-
-    X = np.array([get_feats(t) for t in processed_msgs])
-    le = LabelEncoder()
-    y = le.fit_transform(df["Category"])
-    
-    model = GaussianNB()
-    model.fit(X, y)
-    return model, dictionary, le, preprocess, get_feats
-
-model, dictionary, le, preprocess_fn, feat_fn = load_trained_model()
+            st.markdown("---")
+            if final_prediction == 'spam':
+                st.markdown(f'<div class="prediction-box" style="background-color: #ffebee; color: #c62828;">⚠️ CẢNH BÁO: TIN NHẮN RÁC ({confidence:.1f}%)</div>', unsafe_allow_html=True)
+                st.write("**Ghi chú:** Hệ thống phát hiện các dấu hiệu quảng cáo hoặc lừa đảo rõ rệt.")
+            else:
+                # Nếu máy đoán là Spam nhưng bị điều kiện phụ chặn lại, ta báo là An toàn
+                st.markdown(f'<div class="prediction-box" style="background-color: #e8f5e9; color: #2e7d32;">✅ AN TOÀN: TIN NHẮN THƯỜNG ({confidence:.1f}%)</div>', unsafe_allow_html=True)
+                st.balloons()
+                if confidence > 50 and raw_prediction == 'spam':
+                    st.caption("ℹ️ *Lưu ý: Tin nhắn có một vài từ khóa nhạy cảm nhưng chưa đủ cơ sở để kết luận là Spam.*")
+    else:
+        st.error("Vui lòng nhập nội dung để phân tích!")
 
 # --- GIAO DIỆN CHÍNH ---
 col1, col2 = st.columns([2, 1])
