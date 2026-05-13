@@ -20,7 +20,7 @@ st.markdown("""
     """, unsafe_allow_html=True)
 
 st.title("🛡️ Ứng dụng Phân loại Tin nhắn Spam")
-st.write("Đồ án Chuyên Ngành ")
+st.write("Đồ án Chuyên Ngành - Công nghệ Machine Learning")
 
 # --- HÀM XỬ LÝ DỮ LIỆU ---
 @st.cache_resource
@@ -65,7 +65,7 @@ with col1:
 
 with col2:
     st.subheader("📊 Thông số học máy")
-    st.success("🤖 Mô hình: Naive Bayes và Cơ sở dữ liệu vector")
+    st.success("🤖 Mô hình: Gaussian Naive Bayes")
     st.info(f"📁 Từ điển: {len(dictionary)} đặc trưng")
     st.warning("🌐 Ngôn ngữ: Anh - Việt")
 
@@ -80,7 +80,7 @@ if btn_click:
             raw_prediction = le.inverse_transform([np.argmax(prob)])[0]
             confidence = max(prob) * 100
             
-            # TẦNG LỌC BIAS
+            # TẦNG LỌC BIAS (Sửa lỗi bắt nhầm tin nhắn ngắn/tiếng Việt)
             if confidence < 95 or len(user_input.strip()) < 15:
                 final_prediction = 'ham'
             else:
@@ -89,14 +89,14 @@ if btn_click:
             st.markdown("---")
             if final_prediction == 'spam':
                 st.markdown(f'<div class="prediction-box" style="background-color: #ffebee; color: #c62828;">⚠️ CẢNH BÁO: TIN NHẮN RÁC ({confidence:.1f}%)</div>', unsafe_allow_html=True)
-                st.warning("**Lời khuyên:** Hệ thống phát hiện dấu hiệu quảng cáo hoặc lừa đảo. Không nhấn vào link lạ.")
+                st.warning("**Lời khuyên:** Hệ thống phát hiện dấu hiệu quảng cáo hoặc lừa đảo.")
             else:
                 st.markdown(f'<div class="prediction-box" style="background-color: #e8f5e9; color: #2e7d32;">✅ AN TOÀN: TIN NHẮN THƯỜNG ({confidence:.1f}%)</div>', unsafe_allow_html=True)
                 st.balloons()
                 if confidence > 50 and raw_prediction == 'spam':
                     st.caption("ℹ️ *Lưu ý: Tin nhắn chứa một số từ khóa nhạy cảm nhưng chưa đủ cơ sở để kết luận là Spam.*")
     else:
-        st.error("Vui lòng nhập nội dung!")
+        st.error("Vui lòng nhập nội dung để phân tích!")
 
 # --- THANH BÊN (Sidebar) ---
 st.sidebar.image("https://cdn-icons-png.flaticon.com/512/179/179543.png", width=100)
@@ -106,5 +106,4 @@ st.sidebar.markdown(f"""
 * **Huỳnh Lê Hoàng Yến** - 022101091
 * **Phạm Minh Tuấn** - 022101006
 * **Huỳnh Văn Đăng Khoa** - 022101111
-
-
+""")
