@@ -20,33 +20,36 @@ st.markdown("""
     """, unsafe_allow_html=True)
 
 st.title("🛡️ Ứng dụng Phân loại Tin nhắn Spam")
-st.write("Đồ án Chuyên Ngành ")
+st.write("Đồ án Chuyên Ngành - Công nghệ Machine Learning (Naive Bayes)")
 
-# --- HÀM XỬ LÝ DỮ LIỆU ---
+# --- HÀM XỬ LÝ DỮ LIỆU (Sửa lỗi triệt để cho Streamlit Cloud) ---
 @st.cache_resource
 def load_trained_model():
-    # 1. Tải dữ liệu NLTK bắt buộc (Đã sửa lỗi LookupError)
-    try:
-        nltk.download('punkt')
-        nltk.download('stopwords')
-    except:
-        pass
-
-    # 2. Đọc dữ liệu
+    # Tải dữ liệu NLTK cần thiết ngay khi chạy hàm
+    nltk.download('punkt')
+    nltk.download('stopwords')
+    
+    # Đọc file dữ liệu (Đảm bảo file này đã có trên GitHub của bạn)
     df = pd.read_csv("2cls_spam_text_cls.csv")
     
-    # 3. Định nghĩa hàm preprocess ngay trong này
+    # Khai báo Stemmer
+    ps = PorterStemmer()
+    
     def preprocess(text):
+        # Chuyển chữ thường và xóa dấu câu
         text = str(text).lower().translate(str.maketrans("", "", string.punctuation))
+        # Tách từ
         tokens = nltk.word_tokenize(text)
+        # Loại bỏ stop words
         stop_words = set(stopwords.words("english"))
         tokens = [t for t in tokens if t not in stop_words]
-        return [PorterStemmer().stem(t) for t in tokens]
+        # Stemming
+        return [ps.stem(t) for t in tokens]
 
+    # Tạo từ điển đặc trưng
     processed_msgs = [preprocess(msg) for msg in df["Message"]]
     dictionary = list(set([word for sublist in processed_msgs for word in sublist]))
 
-    # 4. Định nghĩa hàm get_feats
     def get_feats(tokens):
         features = np.zeros(len(dictionary))
         for t in tokens:
@@ -54,18 +57,19 @@ def load_trained_model():
                 features[dictionary.index(t)] += 1
         return features
 
-    # 5. Huấn luyện mô hình
+    # Chuẩn bị dữ liệu huấn luyện
     X = np.array([get_feats(t) for t in processed_msgs])
     le = LabelEncoder()
     y = le.fit_transform(df["Category"])
     
+    # Huấn luyện mô hình Naive Bayes
     model = GaussianNB()
     model.fit(X, y)
-
-    # QUAN TRỌNG: Phải trả về đúng 5 giá trị như đã khai báo ở ngoài
+    
+    # Trả về ĐÚNG 5 giá trị để tránh lỗi TypeError
     return model, dictionary, le, preprocess, get_feats
 
-# Gọi hàm đúng với số lượng biến trả về
+# Gọi hàm và hứng đủ 5 biến
 model, dictionary, le, preprocess_fn, feat_fn = load_trained_model()
 
 # --- GIAO DIỆN CHÍNH ---
@@ -78,7 +82,7 @@ with col1:
 
 with col2:
     st.subheader("📊 Thông số học máy")
-    st.success("🤖 Mô hình: Naive Bayes và Cơ sở dữ liệu vector ")
+    st.success("🤖 Mô hình: Gaussian Naive Bayes")
     st.info(f"📁 Từ điển: {len(dictionary)} đặc trưng")
     st.warning("🌐 Ngôn ngữ: Anh - Việt")
 
@@ -86,14 +90,17 @@ with col2:
 if btn_click:
     if user_input:
         with st.spinner('Đang phân tích xác suất...'):
+            # Tiền xử lý đầu vào từ người dùng
             tokens = preprocess_fn(user_input)
             features = feat_fn(tokens)
             
+            # Dự đoán xác suất
             prob = model.predict_proba([features])[0]
             raw_prediction = le.inverse_transform([np.argmax(prob)])[0]
             confidence = max(prob) * 100
             
-            # TẦNG LỌC BIAS (Sửa lỗi bắt nhầm tin nhắn ngắn/tiếng Việt)
+            # --- TẦNG LỌC BIAS (SỬA LỖI BẮT NHẦM TIN NHẮN NGẮN) ---
+            # Nếu độ tin cậy dưới 95% HOẶC tin nhắn ngắn dưới 15 ký tự -> Mặc định là Ham
             if confidence < 95 or len(user_input.strip()) < 15:
                 final_prediction = 'ham'
             else:
@@ -102,12 +109,13 @@ if btn_click:
             st.markdown("---")
             if final_prediction == 'spam':
                 st.markdown(f'<div class="prediction-box" style="background-color: #ffebee; color: #c62828;">⚠️ CẢNH BÁO: TIN NHẮN RÁC ({confidence:.1f}%)</div>', unsafe_allow_html=True)
-                st.warning("**Lời khuyên:** Hệ thống phát hiện dấu hiệu quảng cáo hoặc lừa đảo.")
+                st.warning("**Lời khuyên:** Hệ thống phát hiện dấu hiệu quảng cáo hoặc lừa đảo. Cẩn thận với các đường link lạ.")
             else:
                 st.markdown(f'<div class="prediction-box" style="background-color: #e8f5e9; color: #2e7d32;">✅ AN TOÀN: TIN NHẮN THƯỜNG ({confidence:.1f}%)</div>', unsafe_allow_html=True)
                 st.balloons()
+                # Hiển thị chú thích nếu máy có nghi ngờ nhẹ nhưng bị bộ lọc chặn lại
                 if confidence > 50 and raw_prediction == 'spam':
-                    st.caption("ℹ️ *Lưu ý: Tin nhắn chứa một số từ khóa nhạy cảm nhưng chưa đủ cơ sở để kết luận là Spam.*")
+                    st.caption("ℹ️ *Lưu ý: Tin nhắn chứa một vài từ khóa nhạy cảm nhưng chưa đủ cơ sở để kết luận là Spam.*")
     else:
         st.error("Vui lòng nhập nội dung để phân tích!")
 
