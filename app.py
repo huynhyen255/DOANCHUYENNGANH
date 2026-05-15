@@ -25,21 +25,47 @@ st.write("Đồ án Chuyên Ngành ")
 # --- HÀM XỬ LÝ DỮ LIỆU ---
 @st.cache_resource
 def load_trained_model():
-    # Thêm dòng này để máy chủ tự tải dữ liệu cần thiết
+    # 1. Tải dữ liệu NLTK bắt buộc (Đã sửa lỗi LookupError)
     try:
-        nltk.data.find('tokenizers/punkt')
-    except LookupError:
         nltk.download('punkt')
-    
-    try:
-        nltk.data.find('corpora/stopwords')
-    except LookupError:
         nltk.download('stopwords')
+    except:
+        pass
 
-    # Các phần code phía dưới giữ nguyên...
+    # 2. Đọc dữ liệu
     df = pd.read_csv("2cls_spam_text_cls.csv")
-    # ...
+    
+    # 3. Định nghĩa hàm preprocess ngay trong này
+    def preprocess(text):
+        text = str(text).lower().translate(str.maketrans("", "", string.punctuation))
+        tokens = nltk.word_tokenize(text)
+        stop_words = set(stopwords.words("english"))
+        tokens = [t for t in tokens if t not in stop_words]
+        return [PorterStemmer().stem(t) for t in tokens]
 
+    processed_msgs = [preprocess(msg) for msg in df["Message"]]
+    dictionary = list(set([word for sublist in processed_msgs for word in sublist]))
+
+    # 4. Định nghĩa hàm get_feats
+    def get_feats(tokens):
+        features = np.zeros(len(dictionary))
+        for t in tokens:
+            if t in dictionary: 
+                features[dictionary.index(t)] += 1
+        return features
+
+    # 5. Huấn luyện mô hình
+    X = np.array([get_feats(t) for t in processed_msgs])
+    le = LabelEncoder()
+    y = le.fit_transform(df["Category"])
+    
+    model = GaussianNB()
+    model.fit(X, y)
+
+    # QUAN TRỌNG: Phải trả về đúng 5 giá trị như đã khai báo ở ngoài
+    return model, dictionary, le, preprocess, get_feats
+
+# Gọi hàm đúng với số lượng biến trả về
 model, dictionary, le, preprocess_fn, feat_fn = load_trained_model()
 
 # --- GIAO DIỆN CHÍNH ---
