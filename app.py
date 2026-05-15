@@ -30,7 +30,7 @@ def download_nltk_resources():
 download_nltk_resources()
 
 # --- THIẾT KẾ GIAO DIỆN ---
-st.set_page_config(page_title="AI Spam Shield Pro", page_icon="🛡️", layout="wide")
+st.set_page_config(page_title="Phân loại tin nhắn Spam", page_icon="🛡️", layout="wide")
 
 st.markdown("""
     <style>
@@ -40,8 +40,8 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-st.title("🛡️ Ứng dụng Phân loại Tin nhắn Spam")
-st.write("Đồ án Chuyên Ngành - Công nghệ Machine Learning")
+st.title("🛡️ Phân loại Tin nhắn Spam")
+st.write("Đồ án Chuyên Ngành")
 
 # --- HÀM XỬ LÝ DỮ LIỆU ---
 @st.cache_resource
@@ -93,7 +93,7 @@ with col1:
 
 with col2:
     st.subheader("📊 Thông số hệ thống")
-    st.success("🤖 Mô hình: Gaussian Naive Bayes")
+    st.success("🤖 Mô hình: Naive Bayes và cơ sở dữ liệu vector")
     st.info(f"📁 Từ điển: {len(dictionary)} từ vựng")
 
 # --- XỬ LÝ KẾT QUẢ ---
