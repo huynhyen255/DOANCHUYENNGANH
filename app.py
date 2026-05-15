@@ -25,33 +25,20 @@ st.write("Đồ án Chuyên Ngành ")
 # --- HÀM XỬ LÝ DỮ LIỆU ---
 @st.cache_resource
 def load_trained_model():
-    nltk.download("stopwords")
-    nltk.download("punkt")
+    # Thêm dòng này để máy chủ tự tải dữ liệu cần thiết
+    try:
+        nltk.data.find('tokenizers/punkt')
+    except LookupError:
+        nltk.download('punkt')
+    
+    try:
+        nltk.data.find('corpora/stopwords')
+    except LookupError:
+        nltk.download('stopwords')
+
+    # Các phần code phía dưới giữ nguyên...
     df = pd.read_csv("2cls_spam_text_cls.csv")
-    
-    def preprocess(text):
-        text = str(text).lower().translate(str.maketrans("", "", string.punctuation))
-        tokens = nltk.word_tokenize(text)
-        stop_words = set(stopwords.words("english"))
-        tokens = [t for t in tokens if t not in stop_words]
-        return [PorterStemmer().stem(t) for t in tokens]
-
-    processed_msgs = [preprocess(msg) for msg in df["Message"]]
-    dictionary = list(set([word for sublist in processed_msgs for word in sublist]))
-
-    def get_feats(tokens):
-        features = np.zeros(len(dictionary))
-        for t in tokens:
-            if t in dictionary: features[dictionary.index(t)] += 1
-        return features
-
-    X = np.array([get_feats(t) for t in processed_msgs])
-    le = LabelEncoder()
-    y = le.fit_transform(df["Category"])
-    
-    model = GaussianNB()
-    model.fit(X, y)
-    return model, dictionary, le, preprocess, get_feats
+    # ...
 
 model, dictionary, le, preprocess_fn, feat_fn = load_trained_model()
 
