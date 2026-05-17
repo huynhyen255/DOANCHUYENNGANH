@@ -22,7 +22,6 @@ if not os.path.exists(nltk_data_path):
 if nltk_data_path not in nltk.data.path:
     nltk.data.path.append(nltk_data_path)
 
-@st.cache_resource
 def download_nltk_resources():
     try:
         nltk.download('punkt', download_dir=nltk_data_path, quiet=True)
@@ -71,10 +70,9 @@ def preprocess_text(text):
     return " ".join(stemmed_tokens)
 
 # ---------------------------------------------------------------------------
-# LÕI HỆ THỐNG: HUẤN LUYỆN MODEL & THIẾT LẬP VECTOR DATABASE
+# LÕI HỆ THỐNG: HUẤN LUYỆN MODEL & THIẾT LẬP VECTOR DATABASE (ĐÃ BỎ CACHE)
 # ---------------------------------------------------------------------------
-@st.cache_resource
-def load_model_pipeline():  # ĐỔI TÊN HÀM ĐỂ ÉP STREAMLIT CLEAR CACHE CŨ HOÀN TOÀN
+def load_model_pipeline_fresh():  
     file_path = '2cls_spam_text_cls.csv'
     if not os.path.exists(file_path):
         return None, f"Không tìm thấy file '{file_path}' trong thư mục dự án!"
@@ -86,7 +84,6 @@ def load_model_pipeline():  # ĐỔI TÊN HÀM ĐỂ ÉP STREAMLIT CLEAR CACHE C
         if 'Category' in df.columns and 'Message' in df.columns:
             df.rename(columns={'Category': 'label', 'Message': 'text'}, inplace=True)
         elif 'label' not in df.columns or 'text' not in df.columns:
-            # Tự động gán lại tên nếu file CSV bị mất tiêu đề hoặc đặt tên khác
             df.columns = ['label', 'text'] + list(df.columns[2:])
             
         df['processed_text'] = df['text'].apply(preprocess_text)
@@ -120,8 +117,8 @@ def load_model_pipeline():  # ĐỔI TÊN HÀM ĐỂ ÉP STREAMLIT CLEAR CACHE C
     except Exception as e:
         return None, f"Lỗi nạp hệ thống: {str(e)}"
 
-# Kích hoạt lõi công nghệ mới
-system_core, status_msg = load_model_pipeline()
+# Kích hoạt lõi công nghệ mới (Chạy tươi mới hoàn toàn)
+system_core, status_msg = load_model_pipeline_fresh()
 
 # ---------------------------------------------------------------------------
 # BỐ CỤC GIAO DIỆN
@@ -164,7 +161,7 @@ if btn_click:
             # 1. Tiền xử lý NLP đầu vào
             processed_input = preprocess_text(user_input)
             
-            # PHÒNG THỦ TUYỆT ĐỐI: Khởi tạo sẵn tất cả giá trị mặc định tránh hoàn toàn lỗi NameError/UnboundLocalError
+            # KHỞI TẠO TẬP TRUNG TẤT CẢ BIẾN ĐỂ TRÁNH LỖI PHÂN NHÁNH TRÊN GIAO DIỆN
             final_decision = "ham"
             nb_prediction_str = "ham"
             knn_prediction_str = "ham"
