@@ -31,7 +31,10 @@ st.set_page_config(
 )
 
 st.title("🛡️ Đồ án: Phân loại tin nhắn Spam sử dụng Naive Bayes và Cơ sở dữ liệu Vector")
-st.caption("Giảng viên hướng dẫn: ThS. Phạm Ngọc Giàu | Sinh viên thực hiện: Huỳnh Lê Hoàng Yến - Huỳnh Văn Đăng Khoa - Phạm Minh Tuấn")
+st.caption("Giảng viên hướng dẫn: ThS. Phạm Ngọc Giàu")
+st.caption("Sinh viên thực hiện: Huỳnh Lê Hoàng Yến 022101091 ")
+                    st.caption(" Huỳnh Văn Đăng Khoa 0221010")
+                    st.caption(" Phạm Minh Tuấn")
 st.write("---")
 
 # ---------------------------------------------------------------------------
