@@ -70,7 +70,7 @@ def preprocess_text(text):
     return " ".join(stemmed_tokens)
 
 # ---------------------------------------------------------------------------
-# LÕI HỆ THỐNG: HUẤN LUYỆN MODEL & THIẾT LẬP VECTOR DATABASE (ĐÃ BỎ CACHE)
+# LÕI HỆ THỐNG: HUẤN LUYỆN MODEL & THIẾT LẬP VECTOR DATABASE (ĐÃ SỬA ĐỔI TOÀN DIỆN)
 # ---------------------------------------------------------------------------
 def load_model_pipeline_fresh():  
     file_path = '2cls_spam_text_cls.csv'
@@ -117,7 +117,7 @@ def load_model_pipeline_fresh():
     except Exception as e:
         return None, f"Lỗi nạp hệ thống: {str(e)}"
 
-# Kích hoạt lõi công nghệ mới (Chạy tươi mới hoàn toàn)
+# Kích hoạt lõi công nghệ mới 
 system_core, status_msg = load_model_pipeline_fresh()
 
 # ---------------------------------------------------------------------------
@@ -183,7 +183,7 @@ if btn_click:
                 
                 if nb_prediction_str in classes_list:
                     pred_index = classes_list.index(nb_prediction_str)
-                    nb_confidence = nb_proba[pred_index] * 100
+                    nb_confidence = float(nb_proba[pred_index]) * 100
                 else:
                     nb_confidence = 50.0
                 
@@ -192,55 +192,6 @@ if btn_click:
                 distances, indices = knn_index.kneighbors(vectorized_vector_db, n_neighbors=k_neighbors)
                 
                 for i in range(k_neighbors):
-                    idx = indices[0][i]
-                    score = 1 - distances[0][i] # Cosine Similarity
-                    neighbors_results.append({
-                        "label": str(all_labels[idx]).strip(),
-                        "text": str(all_texts[idx]).strip(),
-                        "score": score
-                    })
-                
-                # Biểu quyết số đông từ không gian Vector
-                neighbor_labels = [n["label"].lower() for n in neighbors_results]
-                if neighbor_labels:
-                    knn_prediction_str = max(set(neighbor_labels), key=neighbor_labels.count)
-                
-                # MA TRẬN BIỂU QUYẾT TỔNG HỢP PIPELINE
-                if nb_prediction_str == "spam" or knn_prediction_str == "spam":
-                    final_decision = "spam"
-                else:
-                    final_decision = "ham"
-            
-            # --- HIỂN THỊ HỘP KẾT QUẢ MÀU SẮC ĐẸP ---
-            st.markdown("---")
-            if final_decision == 'spam':
-                st.markdown(f'<div class="prediction-box" style="background-color: #ffebee; color: #c62828;">🚨 CẢNH BÁO: TIN NHẮN SPAM / RÁC</div>', unsafe_allow_html=True)
-            else:
-                st.markdown(f'<div class="prediction-box" style="background-color: #e8f5e9; color: #2e7d32;">✅ AN TOÀN: TIN NHẮN HỢP LỆ (HAM)</div>', unsafe_allow_html=True)
-                st.balloons()
-            
-            # --- HIỂN THỊ CHI TIẾT TABS ---
-            tab1, tab2 = st.tabs(["📐 Chi tiết Thống kê toán học", "📝 Nhật ký chuỗi sau NLP"])
-            with tab1:
-                st.write(f"- Dự đoán Naive Bayes: **`{nb_prediction_str.upper()}`** (Độ tự tin: {nb_confidence:.2f}%)")
-                st.write(f"- Biểu quyết Vector DB: **`{knn_prediction_str.upper()}`**")
-                if len(neighbors_results) > 0:
-                    st.write(f"**Top mẫu tương đồng nhất trong Cơ sở dữ liệu Vector:**")
-                    for r, n in enumerate(neighbors_results, 1):
-                        st.caption(f"{r}. Nhãn: `{n['label'].upper()}` | Độ khớp hình học: {n['score']:.4f} -> Txt: *\"{n['text']}\"*")
-            with tab2:
-                st.write("Mã Token sau khi làm sạch chữ thường, xóa kí tự đặc biệt và lọc Stopwords:")
-                st.code(processed_input if processed_input.strip() else "[Chuỗi trống]", language="text")
-
-# ---------------------------------------------------------------------------
-# THANH BÊN (Sidebar)
-# ---------------------------------------------------------------------------
-st.sidebar.title("Thông tin Nhóm")
-st.sidebar.markdown("""
-* **Giảng viên hướng dẫn:** ThS. Phạm Ngọc Giàu
-* **Thành viên thực hiện:**
-  - Huỳnh Lê Hoàng Yến - `022101091`
-  - Phạm Minh Tuấn - `022101006`
-  - Huỳnh Văn Đăng Khoa - `022101111`
-* **Lớp:** ĐH CNTT22B
-""")
+                    # FIX TRIỆT ĐỂ LỖI: Ép kiểu int() thuần Python cho chỉ số hàng tìm kiếm
+                    idx = int(indices[0][i]) 
+                    score = 1 - float(distances[0][i]) # Ép kiểu số
