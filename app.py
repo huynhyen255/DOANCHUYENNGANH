@@ -74,7 +74,7 @@ def preprocess_text(text):
 # LÕI HỆ THỐNG: HUẤN LUYỆN MODEL & THIẾT LẬP VECTOR DATABASE
 # ---------------------------------------------------------------------------
 @st.cache_resource
-def initialize_system():
+def load_model_pipeline():  # ĐỔI TÊN HÀM ĐỂ ÉP STREAMLIT CLEAR CACHE CŨ HOÀN TOÀN
     file_path = '2cls_spam_text_cls.csv'
     if not os.path.exists(file_path):
         return None, f"Không tìm thấy file '{file_path}' trong thư mục dự án!"
@@ -82,15 +82,16 @@ def initialize_system():
     try:
         df = pd.read_csv(file_path, quotechar='"', quoting=csv.QUOTE_MINIMAL, on_bad_lines='skip', encoding='utf-8')
         
-        # Đồng bộ hóa cột an toàn bằng cách nhận diện động
+        # Nhận diện và đồng bộ hóa tên cột động linh hoạt
         if 'Category' in df.columns and 'Message' in df.columns:
             df.rename(columns={'Category': 'label', 'Message': 'text'}, inplace=True)
         elif 'label' not in df.columns or 'text' not in df.columns:
-            return None, "File CSV không đúng định dạng cột quy định (Category/Message hoặc label/text)!"
+            # Tự động gán lại tên nếu file CSV bị mất tiêu đề hoặc đặt tên khác
+            df.columns = ['label', 'text'] + list(df.columns[2:])
             
         df['processed_text'] = df['text'].apply(preprocess_text)
         
-        # Trích xuất dạng mảng độc lập để tránh lỗi KeyError chỉ mục hàng
+        # Trích xuất mảng numpy độc lập tách rời khỏi DataFrame để chống lỗi chỉ mục
         all_labels = df['label'].astype(str).values
         all_texts = df['text'].astype(str).values
         
@@ -119,8 +120,8 @@ def initialize_system():
     except Exception as e:
         return None, f"Lỗi nạp hệ thống: {str(e)}"
 
-# Kích hoạt lõi công nghệ
-system_core, status_msg = initialize_system()
+# Kích hoạt lõi công nghệ mới
+system_core, status_msg = load_model_pipeline()
 
 # ---------------------------------------------------------------------------
 # BỐ CỤC GIAO DIỆN
@@ -163,15 +164,15 @@ if btn_click:
             # 1. Tiền xử lý NLP đầu vào
             processed_input = preprocess_text(user_input)
             
-            # KHỞI TẠO BIẾN TRƯỚC PHÂN NHÁNH TRÁNH LỖI NAMEERROR
-            neighbors_results = []
+            # PHÒNG THỦ TUYỆT ĐỐI: Khởi tạo sẵn tất cả giá trị mặc định tránh hoàn toàn lỗi NameError/UnboundLocalError
+            final_decision = "ham"
+            nb_prediction_str = "ham"
+            knn_prediction_str = "ham"
             nb_confidence = 100.0
+            neighbors_results = []
             
             # 2. Xử lý bộ lọc tin nhắn quá ngắn
             if len(user_input.strip()) < 8:
-                final_decision = "ham"
-                nb_prediction_str = "ham"
-                knn_prediction_str = "ham"
                 st.warning("⚠️ Nhận diện: Tin nhắn quá ngắn. Hệ thống đưa vào vùng an toàn.")
             else:
                 # === TIẾN TRÌNH 1: DỰ ĐOÁN XÁC SUẤT NAIVE BAYES ===
@@ -179,7 +180,7 @@ if btn_click:
                 nb_pred = nb_model.predict(vectorized_nb)[0]
                 nb_prediction_str = str(nb_pred).strip().lower()
                 
-                # Trích xuất vị trí chỉ số an toàn từ mảng thuần Python
+                # Trích xuất chỉ số an toàn từ mảng thuần Python
                 classes_list = [str(c).strip().lower() for c in nb_model.classes_]
                 nb_proba = nb_model.predict_proba(vectorized_nb)[0]
                 
@@ -202,11 +203,12 @@ if btn_click:
                         "score": score
                     })
                 
-                # Biểu quyết số đông từ Vector DB
+                # Biểu quyết số đông từ không gian Vector
                 neighbor_labels = [n["label"].lower() for n in neighbors_results]
-                knn_prediction_str = max(set(neighbor_labels), key=neighbor_labels.count)
+                if neighbor_labels:
+                    knn_prediction_str = max(set(neighbor_labels), key=neighbor_labels.count)
                 
-                # MA TRẬN BIỂU QUYẾT TỔNG HỢP
+                # MA TRẬN BIỂU QUYẾT TỔNG HỢP PIPELINE
                 if nb_prediction_str == "spam" or knn_prediction_str == "spam":
                     final_decision = "spam"
                 else:
@@ -220,7 +222,7 @@ if btn_click:
                 st.markdown(f'<div class="prediction-box" style="background-color: #e8f5e9; color: #2e7d32;">✅ AN TOÀN: TIN NHẮN HỢP LỆ (HAM)</div>', unsafe_allow_html=True)
                 st.balloons()
             
-            # --- HIỂN THỊ THÊM TABS CHI TIẾT ĐỂ CÔ ĐÁNH GIÁ CAO ---
+            # --- HIỂN THỊ CHI TIẾT TABS ---
             tab1, tab2 = st.tabs(["📐 Chi tiết Thống kê toán học", "📝 Nhật ký chuỗi sau NLP"])
             with tab1:
                 st.write(f"- Dự đoán Naive Bayes: **`{nb_prediction_str.upper()}`** (Độ tự tin: {nb_confidence:.2f}%)")
