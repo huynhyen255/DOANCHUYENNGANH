@@ -29,6 +29,22 @@ def download_nltk_resources():
 
 download_nltk_resources()
 
+# --- HÀM BỔ TRỢ: CHUYỂN ĐỔI TIẾNG VIỆT CÓ DẤU THÀNH KHÔNG DẤU ---
+def remove_vietnamese_accents(text):
+    patterns = {
+        '[àáảãạăằắẳẵặâầấẩẫậ]': 'a',
+        '[èéẹẻẽêềếệểễ]': 'e',
+        '[ìíịỉĩ]': 'i',
+        '[òóọỏõôồốộổỗơờớợởỡ]': 'o',
+        '[ùúụủũưừứựửữ]': 'u',
+        '[ỳýỵỷỹ]': 'y',
+        '[đ]': 'd'
+    }
+    output = text
+    for pattern, repl in patterns.items():
+        output = re.sub(pattern, repl, output)
+    return output
+
 # --- THIẾT KẾ GIAO DIỆN ---
 st.set_page_config(page_title="Phân loại tin nhắn Spam", page_icon="🛡️", layout="wide")
 
@@ -41,7 +57,7 @@ st.markdown("""
     """, unsafe_allow_html=True)
 
 st.title("🛡️ Phân loại Tin nhắn Spam")
-st.write("Đồ án Chuyên Ngành - Hệ thống Phân loại Đa ngôn ngữ (Anh - Việt) tích hợp Naive Bayes & Vector DB")
+st.write("Đồ án Chuyên Ngành - Hệ thống Phân loại tích hợp Naive Bayes & Vector Database (Hỗ trợ Anh - Việt)")
 st.write("---")
 
 # --- HÀM XỬ LÝ DỮ LIỆU & HUẤN LUYỆN SONG SONG ---
@@ -51,14 +67,19 @@ def load_trained_model():
     ps = PorterStemmer()
     
     def preprocess(text):
-        # Chuyển chữ thường và giữ lại các ký tự tiếng Việt có dấu + chữ tiếng Anh + số
+        # 1. Chuyển về chữ thường và chuẩn hóa loại bỏ dấu tiếng Việt để đồng bộ dữ liệu nền
         text = str(text).lower()
-        text = re.sub(r'[^a-zA-Z0-9\sàáạảãâầấậẩẫăằắặẳẵèéẹẻẽêềếệểễìíịỉĩòóọỏõôồốộổỗơờớợởỡùúụủũưừứựửữỳýỵỷỹđ]', '', text)
-        tokens = nltk.word_tokenize(text)
+        text = remove_vietnamese_accents(text)
         
-        # Kết hợp Stopwords Anh - Việt rác hay gặp
+        # 2. Xóa bỏ ký tự đặc biệt, giữ lại chữ và số an toàn
+        text = re.sub(r'[^a-z0-9\s]', '', text)
+        
+        # 3. Phân tách từ bằng NLTK
+        tokens = nltk.word_tokenize(text)
         stop_words = set(stopwords.words("english"))
-        vi_stopwords = {'và', 'với', 'là', 'thì', 'mà', 'bị', 'được', 'cho', 'của', 'các', 'này', 'trong', 'để'}
+        
+        # Thêm một vài từ dừng tiếng Việt cơ bản (dạng không dấu) để làm sạch chuỗi
+        vi_stopwords = {'va', 'voi', 'la', 'thi', 'ma', 'bi', 'duoc', 'cho', 'cua', 'cac', 'nay', 'trong', 'de'}
         stop_words = stop_words.union(vi_stopwords)
         
         tokens = [t for t in tokens if t not in stop_words]
@@ -67,8 +88,8 @@ def load_trained_model():
     processed_msgs = [preprocess(msg) for msg in df["Message"]]
     dictionary = list(set([word for sublist in processed_msgs for word in sublist]))
 
-    # Bổ sung các từ khóa kích hoạt nhận diện Spam tiếng Việt phổ biến vào từ điển nền
-    vi_spam_keywords = ['vay', 'von', 'nhan', 'thuong', 'ca', 'cuoc', 'uu', 'dai', 'tai', 'khoan', 'rut', 'tien', 'lua', 'dao', 'trieu', 'qua', 'tang']
+    # Bổ sung các token từ khóa rác tiếng Việt (đã bỏ dấu) trực tiếp vào từ điển của hệ thống
+    vi_spam_keywords = ['vay', 'von', 'nhan', 'thuong', 'ca', 'cuoc', 'uu', 'dai', 'tai', 'khoan', 'rut', 'tien', 'lua', 'dao', 'trieu', 'qua', 'tang', 'hotlin', 'lien', 'ket']
     for kw in vi_spam_keywords:
         if kw not in dictionary:
             dictionary.append(kw)
@@ -88,7 +109,7 @@ def load_trained_model():
     model = GaussianNB()
     model.fit(X, y)
     
-    # 2. Khởi tạo & Thiết lập index cho Cơ sở dữ liệu Vector (KNN Cosine)
+    # 2. Khởi tạo & Thiết lập Cơ sở dữ liệu Vector (KNN Cosine)
     knn_vector_db = NearestNeighbors(n_neighbors=5, metric='cosine')
     knn_vector_db.fit(X)
     
@@ -109,28 +130,27 @@ col1, col2 = st.columns([2, 1])
 
 with col1:
     st.subheader("📝 Phân tích nội dung")
-    user_input = st.text_area("Nhập tin nhắn cần kiểm tra (Hỗ trợ cả Tiếng Anh và Tiếng Việt):", height=180, placeholder="Dán nội dung tin nhắn cần quét tại đây...")
+    user_input = st.text_area("Nhập tin nhắn cần kiểm tra (Hỗ trợ cả Tiếng Anh và Tiếng Việt):", height=180, placeholder="Dán nội dung tin nhắn rác hoặc hội thoại tại đây...")
     btn_click = st.button("🚀 BẮT ĐẦU PHÂN TÍCH")
 
 with col2:
     st.subheader("📊 Thông số hệ thống")
-    st.success("🤖 Mô hình: Song hành Naive Bayes & Vector DB")
+    st.success("🤖 Mô hình: Naive Bayes & Vector Database")
     st.info(f"📁 Tổng từ vựng từ điển: {len(dictionary)} từ")
 
-# --- XỬ LÝ KẾT QUẢ TÍCH HỢP ĐA NGÔN NGỮ ---
+# --- XỬ LÝ KẾT QUẢ TÍCH HỢP LAI ---
 if btn_click:
     if user_input.strip():
-        with st.spinner('Hệ thống đang thực thi phân tích chuỗi văn bản...'):
-            # 1. Chạy tầng kiểm tra heuristic bằng biểu thức chính quy (Regex) dành riêng cho Spam tiếng Việt
-            # Giúp hệ thống bắt cứng ngay lập tức các tin nhắn lừa đảo tài chính, cờ bạc bằng tiếng Việt
+        with st.spinner('Hệ thống đang chạy quy trình phân tích ngôn ngữ lai...'):
+            # 1. Tầng quét từ khóa cứng (Heuristic Regex) - Nhận diện nhanh các mẫu tin nhắn rác Việt Nam thị trường
+            user_input_no_accent = remove_vietnamese_accents(user_input.lower())
             vietnamese_spam_pattern = re.compile(
-                r'(vay\s+vốn|nhận\s+thưởng|quà\s+tặng|trúng\s+thưởng|lì\s+xì|cá\s+cược|tài\s+khoản\s+bị|khóa\s+thẻ|kiếm\s+tiền\s+online|nhấp\s+vào\s+liên\s+kết|nhan\s+thuong|trung\s+thuong|vay\s+von|ca\s+cuoc)', 
+                r'(vay\s+von|nhan\s+thuong|qua\s+tang|trung\s+thuong|li\s+xi|ca\s+cuoc|tai\s+khoan\s+bi|khoa\s+the|kiem\s+tien\s+onlin|nhap\s+vao|co\s+hoi\s+nhan|tang\s+mien\s+phi|hotlin)', 
                 re.IGNORECASE
             )
-            
-            is_vi_spam_rule = bool(vietnamese_spam_pattern.search(user_input))
+            is_vi_spam_rule = bool(vietnamese_spam_pattern.search(user_input_no_accent))
 
-            # 2. Trích xuất đặc trưng toán học của câu đầu vào thông qua NLP nâng cấp
+            # 2. Trích xuất đặc trưng toán học (Bag of Words) sau khi chuẩn hóa ngôn ngữ
             tokens = preprocess_fn(user_input)
             features = feat_fn(tokens)
             
@@ -158,11 +178,11 @@ if btn_click:
             
             knn_prediction = max(set(knn_labels), key=knn_labels.count)
             
-            # --- PHẦN C: ĐA TẦNG QUYẾT ĐỊNH LAI (HYBRID DECISION) ---
-            # Nếu dính luật từ khóa tiếng Việt HOẶC Naive Bayes báo spam HOẶC Vector DB báo spam -> Kết luận SPAM
+            # --- PHẦN C: ĐA TẦNG QUYẾT ĐỊNH (HYBRID DECISION PIPELINE) ---
+            # Nếu dính từ khóa Spam tiếng Việt HOẶC một trong các mô hình báo Spam -> Kết luận SPAM
             if is_vi_spam_rule:
                 final_prediction = 'spam'
-                confidence = 100.0  # Định danh tuyệt đối bằng bộ lọc Heuristic tiếng Việt
+                confidence = 100.0  # Gán độ tự tin tuyệt đối cho bộ lọc Heuristic
             elif confidence < 90 or len(user_input.strip()) < 8:
                 final_prediction = 'ham'
             else:
@@ -179,18 +199,19 @@ if btn_click:
                 st.markdown(f'<div class="prediction-box" style="background-color: #e8f5e9; color: #2e7d32;">✅ AN TOÀN: TIN NHẮN HỢP LỆ ({confidence:.1f}%)</div>', unsafe_allow_html=True)
                 st.balloons()
             
-            # Khối hiển thị log chi tiết
+            # Khối thông tin Log kỹ thuật hỗ trợ chấm điểm đồ án
             st.write("")
             with st.expander("🔍 Chi tiết phân tích kỹ thuật của mô hình lai (Hybrid Pipeline)"):
                 st.markdown(f"**Kết quả kiểm tra từng tầng toán học:**")
-                st.write(f"- Khớp quy tắc Heuristic Tiếng Việt: `{is_vi_spam_rule}`")
-                st.write(f"- Nhãn dự đoán của Naive Bayes: `{raw_prediction.upper()}`")
+                st.write(f"- Khớp quy tắc bộ lọc Tiếng Việt: `{is_vi_spam_rule}`")
+                st.write(f"- Nhãn dự đoán ban đầu của Naive Bayes: `{raw_prediction.upper()}`")
                 st.write(f"- Nhãn biểu quyết của Cơ sở dữ liệu Vector: `{knn_prediction.upper()}`")
-                st.write(f"**Top 3 tin nhắn tương đồng trong Database nền tiếng Anh:**")
+                st.write(f"- Danh sách Tokens sau NLP: `{tokens}`")
+                st.write(f"**Top 3 tin nhắn tương đồng gần nhất trong Database nền:**")
                 for rank, sample in enumerate(similar_samples, 1):
-                    st.caption(f"*{rank}. Nhãn gốc:* `{sample['label'].upper()}` | *Độ khớp hình học:* `{sample['score']:.4f}` -> *Nội dung:* \"{sample['text']}\"")
+                    st.caption(f"*{rank}. Nhãn gốc:* `{sample['label'].upper()}` | *Độ khớp hình học:* `{sample['score']:.4f}` -> *Nội dung mẫu:* \"{sample['text']}\"")
     else:
-        st.error("Vui lòng nhập nội dung tin nhắn trước!")
+        st.error("Vui lòng không để trống nội dung tin nhắn cần quét!")
 
 # --- THANH BÊN (Sidebar) ---
 st.sidebar.title("Thông tin Nhóm")
