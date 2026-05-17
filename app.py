@@ -1,122 +1,223 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-import string
+import re
+import os
+
+# --- THƯ VIỆN XỬ LÝ NGÔN NGỮ TỰ NHIÊN (NLP) ---
 import nltk
-from sklearn.naive_bayes import MultinomialNB  # Đổi sang MultinomialNB chuyên cho text
-from sklearn.preprocessing import LabelEncoder
 from nltk.tokenize import word_tokenize
+from nltk.corpus import stopwords
+from nltk.stem import PorterStemmer
 
-# --- TẢI TÀI NGUYÊN NLTK NGOÀI HÀM CACHE ---
-@st.cache_resource
-def download_nltk_deps():
-    try:
-        nltk.data.find('tokenizers/punkt')
-    except LookupError:
-        nltk.download("punkt", quiet=True)
+# --- THƯ VIỆN HỌC MÁY & VECTOR DATABASE ---
+from sklearn.feature_extraction.text import CountVectorizer, TfidfVectorizer
+from sklearn.naive_bayes import MultinomialNB
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import accuracy_score
+from sklearn.neighbors import NearestNeighbors
 
-download_nltk_deps()
+# Tải tài nguyên NLTK ẩn bảo đảm không gây chậm hệ thống
+nltk.download('punkt', quiet=True)
+nltk.download('stopwords', quiet=True)
 
-# --- THIẾT KẾ GIAO DIỆN NÂNG CẤP ---
-st.set_page_config(page_title="AI Spam Shield Pro", page_icon="🛡️", layout="wide")
+# ---------------------------------------------------------------------------
+# CẤU HÌNH GIAO DIỆN STREAMLIT CHUẨN BÁO CÁO ĐỒ ÁN
+# ---------------------------------------------------------------------------
+st.set_page_config(
+    page_title="Spam Message Classification using Naive Bayes and Vector Database",
+    page_icon="🛡️",
+    layout="wide"
+)
 
-st.markdown("""
-    <style>
-    .main { background-color: #f5f7f9; }
-    .stButton>button { width: 100%; border-radius: 20px; height: 3em; background-color: #ff4b4b; color: white; font-weight: bold; }
-    .prediction-box { padding: 20px; border-radius: 15px; text-align: center; font-size: 24px; font-weight: bold; margin-bottom: 15px; }
-    </style>
-    """, unsafe_allow_html=True)
+st.title("🛡️ Đồ án Chuyên ngành: Phân loại tin nhắn Spam sử dụng Naive Bayes và Cơ sở dữ liệu Vector")
+st.write("---")
 
-st.title("🛡️ Ứng dụng Phân loại Tin nhắn Spam")
-st.caption("Đồ án Chuyên Ngành - Thành viên: Yến, Tuấn, Khoa")
-
-# --- TIỀN XỬ LÝ TEXT (Hỗ trợ Song ngữ Anh - Việt) ---
-def preprocess(text):
-    text = str(text).lower().translate(str.maketrans("", "", string.punctuation))
+# ---------------------------------------------------------------------------
+# PHẦN II.4: TIỀN XỬ LÝ DỮ LIỆU
+# ---------------------------------------------------------------------------
+def preprocess_text(text):
+    text = str(text).lower()
+    text = re.sub(r'[^a-zA-Z0-9\sàáạảãâầấậẩẫăằắặẳẵèéẹẻẽêềếệểễìíịỉĩòóọỏõôồốộổỗơờớợởỡùúụủũưừứựửữỳýỵỷỹđ]', '', text)
     tokens = word_tokenize(text)
-    # Không dùng PorterStemmer cho tiếng Việt để tránh lỗi mất dấu/biến dạng từ
-    return tokens
+    
+    stop_words = set(stopwords.words('english'))
+    vietnamese_stopwords = {'và', 'với', 'là', 'thì', 'mà', 'bị', 'được', 'cho', 'của', 'các', 'này'}
+    stop_words = stop_words.union(vietnamese_stopwords)
+    filtered_tokens = [w for w in tokens if w not in stop_words]
+    
+    stemmer = PorterStemmer()
+    stemmed_tokens = [stemmer.stem(w) for w in filtered_tokens]
+    
+    return " ".join(stemmed_tokens)
 
-# --- HÀM TẢI VÀ HUẤN LUYỆN MÔ HÌNH (Đã tối ưu hóa tốc độ) ---
+# ---------------------------------------------------------------------------
+# HÀM HUẤN LUYỆN VÀ TẠO CHỈ MỤC VECTOR DATABASE INTERACTIVE
+# ---------------------------------------------------------------------------
 @st.cache_resource
-def load_trained_model():
-    # Đọc dữ liệu
-    df = pd.read_csv("2cls_spam_text_cls.csv")
+def initialize_system():
+    file_path = '2cls_spam_text_cls.csv'
+    if not os.path.exists(file_path):
+        return None, "Không tìm thấy file dữ liệu mẫu '2cls_spam_text_cls.csv'. Vui lòng kiểm tra lại thư mục gốc!"
     
-    # Tiền xử lý tập dữ liệu
-    processed_msgs = [preprocess(msg) for msg in df["Message"]]
-    
-    # Tạo từ điển (Vocabulary)
-    dictionary = list(set([word for sublist in processed_msgs for word in sublist]))
-    word_to_idx = {word: i for i, word in enumerate(dictionary)} # Dùng dict để tăng tốc độ lookup từ O(N) lên O(1)
+    try:
+        df = pd.read_csv(file_path)
+        df['processed_text'] = df['text'].apply(preprocess_text)
+        
+        # === PHẦN II: PHÂN LOẠI MÔ HÌNH HỌC MÁY NAIVE BAYES ===
+        cv = CountVectorizer()
+        X_nb = cv.fit_transform(df['processed_text']).toarray()
+        y_nb = df['label'].values
+        X_train_nb, X_test_nb, y_train_nb, y_test_nb = train_test_split(X_nb, y_nb, test_size=0.2, random_state=42)
+        
+        nb_model = MultinomialNB()
+        nb_model.fit(X_train_nb, y_train_nb)
+        nb_acc = accuracy_score(y_test_nb, nb_model.predict(X_test_nb))
+        
+        # === PHẦN III: THIẾT LẬP CƠ SỞ DỮ LIỆU VECTOR & CHỈ MỤC KNN ===
+        tfidf = TfidfVectorizer()
+        X_vector_db = tfidf.fit_transform(df['processed_text']).toarray()
+        
+        knn_index = NearestNeighbors(n_neighbors=5, metric='cosine')
+        knn_index.fit(X_vector_db)
+        
+        return {
+            "cv": cv, "nb_model": nb_model, "nb_acc": nb_acc,
+            "tfidf": tfidf, "knn_index": knn_index, "df": df
+        }, "Hệ thống tích hợp Naive Bayes & Cơ sở dữ liệu Vector khởi tạo thành công!"
+    except Exception as e:
+        return None, f"Lỗi nghiêm trọng trong quá trình nạp hệ thống: {str(e)}"
 
-    # Hàm biến đổi vector đặc trưng nhanh
-    def get_feats(tokens):
-        features = np.zeros(len(dictionary))
-        for t in tokens:
-            if t in word_to_idx: 
-                features[word_to_idx[t]] += 1
-        return features
+system_core, status_msg = initialize_system()
 
-    # Tạo ma trận đặc trưng X
-    X = np.array([get_feats(t) for t in processed_msgs])
-    
-    # Mã hóa nhãn y
-    le = LabelEncoder()
-    y = le.fit_transform(df["Category"])
-    
-    # Huấn luyện mô hình MultinomialNB (Nhanh hơn GaussianNB gấp 10-100 lần trên ma trận thưa)
-    model = MultinomialNB()
-    model.fit(X, y)
-    
-    return model, dictionary, le, get_feats
+# Bố cục giao diện
+layout_left, layout_right = st.columns([1, 2])
 
-# Khởi tạo mô hình
-with st.spinner('🔄 Đang khởi tạo hệ thống AI (Vui lòng đợi trong giây lát)...'):
-    model, dictionary, le, feat_fn = load_trained_model()
-
-# --- GIAO DIỆN CHÍNH ---
-col1, col2 = st.columns([2, 1])
-
-with col1:
-    st.subheader("📝 Phân tích nội dung")
-    user_input = st.text_area("Nhập tin nhắn (Anh/Việt):", height=180, placeholder="Nhập hoặc dán tin nhắn cần kiểm tra tại đây...")
-
-with col2:
-    st.subheader("📊 Thông số học máy")
-    st.info(f"📚 Kích thước từ điển: **{len(dictionary)}** từ")
-    st.success("🤖 Thuật toán: **Multinomial Naive Bayes**")
-
-# Nút kích hoạt phân tích nằm ngoài cột để căn đều giao diện
-if st.button("🚀 BẮT ĐẦU PHÂN TÍCH"):
-    if user_input.strip():
-        with st.spinner('Đang phân tích xác suất...'):
-            tokens = preprocess(user_input)
-            features = feat_fn(tokens)
-            
-            # Dự đoán xác suất
-            prob = model.predict_proba([features])[0]
-            pred_class_idx = np.argmax(prob)
-            prediction = le.inverse_transform([pred_class_idx])[0]
-            confidence = prob[pred_class_idx] * 100
-
-            st.markdown("---")
-            # Hiển thị kết quả trực quan
-            if prediction.lower() == 'spam':
-                st.markdown(f'<div class="prediction-box" style="background-color: #ffebee; color: #c62828;">⚠️ CẢNH BÁO: TIN NHẮN RÁC ({confidence:.2f}%)</div>', unsafe_allow_html=True)
-                st.warning("👉 **Lời khuyên:** Tin nhắn này có dấu hiệu lừa đảo hoặc quảng cáo phiền toái. Không nhấn vào bất kỳ đường link nào!")
-            else:
-                st.markdown(f'<div class="prediction-box" style="background-color: #e8f5e9; color: #2e7d32;">✅ AN TOÀN: TIN NHẮN THƯỜNG ({confidence:.2f}%)</div>', unsafe_allow_html=True)
-                st.balloons()
+with layout_left:
+    st.header("📊 Thông tin đồ án")
+    if system_core is None:
+        st.error(status_msg)
     else:
-        st.error("⚠️ Vui lòng nhập nội dung tin nhắn trước khi phân tích!")
+        st.success(status_msg)
+        st.metric(label="Độ chính xác kiểm thử Naive Bayes", value=f"{system_core['nb_acc']*100:.2f}%")
+        
+        st.markdown("### 👨‍🏫 Giảng viên hướng dẫn:")
+        st.write("- **ThS. Phạm Ngọc Giàu**")
+        
+        st.markdown("### 👥 Sinh viên thực hiện:")
+        st.write("- 🧑‍💻 **Huỳnh Lê Hoàng Yến** — MSSV: `022101091` (Lớp: ĐH CNTT22B)")
+        st.write("- 🧑‍💻 **Huỳnh Văn Đăng Khoa** — MSSV: `022101111` (Lớp: ĐH CNTT22B)")
+        st.write("- 🧑‍💻 **Phạm Minh Tuấn** — MSSV: `022101006` (Lớp: ĐH CNTT22B)")
+        
+        st.write("---")
+        st.info(
+            "**Thông số kỹ thuật lõi:**\n"
+            "- Pipeline 1: Multinomial Naive Bayes\n"
+            "- Pipeline 2: Vector DB Index\n"
+            "- Hàm khoảng cách: Cosine Distance"
+        )
 
-# --- THANH SIDEBAR QUẢN LÝ ĐỒ ÁN ---
-st.sidebar.image("https://cdn-icons-png.flaticon.com/512/179/179543.png", width=100)
-st.sidebar.title("Quản lý Đồ án")
-st.sidebar.markdown("---")
-st.sidebar.write("**Thành viên thực hiện:**")
-st.sidebar.write("1. 👩‍🎓 Huỳnh Lê Hoàng Yến - *022101091*")  
-st.sidebar.write("2. 👨‍🎓 Phạm Minh Tuấn - *022101006*")  
-st.sidebar.write("3. 👨‍🎓 Huỳnh Văn Đăng Khoa - *022101111*")
+with layout_right:
+    st.header("🔍 Hệ thống kiểm thử Pipeline")
+    user_input = st.text_area("Nhập nội dung văn bản / tin nhắn cần phân loại kiểm thử:", height=120, 
+                              placeholder="Nhập hoặc dán nội dung đoạn tin nhắn tại đây...")
+    
+    k_neighbors = st.slider("Cấu hình số lượng láng giềng k tra cứu trong Vector DB (Phần III):", min_value=1, max_value=5, value=3)
+    
+    if st.button("🚀 Thực thi Pipeline phân loại kết hợp", type="primary"):
+        if not user_input.strip():
+            st.warning("Hệ thống yêu cầu nhập nội dung văn bản trước khi bấm thực thi!")
+        elif system_core is None:
+            st.error("Lỗi lõi hệ thống chưa được giải phóng!")
+        else:
+            cv = system_core["cv"]
+            nb_model = system_core["nb_model"]
+            tfidf = system_core["tfidf"]
+            knn_index = system_core["knn_index"]
+            df = system_core["df"]
+            
+            processed_input = preprocess_text(user_input)
+            
+            st.write("---")
+            st.subheader("📊 Kết quả thực nghiệm phân tích:")
+            
+            # Khống chế tin nhắn quá ngắn
+            if len(user_input.strip()) < 10:
+                final_decision = "Ham"
+                nb_prediction_str = "Ham"
+                knn_prediction_str = "Ham"
+                nb_confidence = 100.0
+                neighbors_results = []
+                st.warning("⚠️ Nhận diện: Tin nhắn có độ dài quá ngắn. Hệ thống tự động đưa vào danh sách an toàn.")
+            else:
+                # =======================================================================
+                # MÔ HÌNH 1: NAIVE BAYES
+                # =======================================================================
+                vectorized_nb = cv.transform([processed_input]).toarray()
+                nb_prediction = nb_model.predict(vectorized_nb)
+                
+                # ÉP CHẶT VỀ DẠNG CHUỖI ĐƠN TỬ (SỬA LỖI VALUEERROR)
+                nb_prediction_str = str(nb_prediction[0]) 
+                
+                nb_proba = nb_model.predict_proba(vectorized_nb)[0]
+                labels_list = list(nb_model.classes_)
+                pred_index = labels_list.index(nb_prediction_str)
+                nb_confidence = nb_proba[pred_index] * 100
+                
+                # =======================================================================
+                # MÔ HÌNH 2: VECTOR DATABASE & KNN
+                # =======================================================================
+                vectorized_vector_db = tfidf.transform([processed_input]).toarray()
+                distances, indices = knn_index.kneighbors(vectorized_vector_db, n_neighbors=k_neighbors)
+                
+                neighbors_results = []
+                for i in range(k_neighbors):
+                    idx = indices[0][i]
+                    score = 1 - distances[0][i]
+                    neighbors_results.append({
+                        "label": df.iloc[idx]['label'],
+                        "text": df.iloc[idx]['text'],
+                        "score": score
+                    })
+                
+                neighbor_labels = [n["label"] for n in neighbors_results]
+                knn_prediction = max(set(neighbor_labels), key=neighbor_labels.count)
+                knn_prediction_str = str(knn_prediction) # Bảo đảm đồng bộ dạng chuỗi kí tự
+                
+                # BIỂU QUYẾT TỔNG HỢP (Đã an toàn vì so sánh chuỗi thuần túy)
+                if nb_prediction_str.lower() == "spam" or knn_prediction_str.lower() == "spam":
+                    final_decision = "Spam"
+                else:
+                    final_decision = "Ham"
+
+            # =======================================================================
+            # TABS HIỂN THỊ TRỰC QUAN
+            # =======================================================================
+            tab1, tab2, tab3 = st.tabs(["🛡️ Kết luận Pipeline chung", "📐 Nhật ký Vector Database (KNN)", "📝 Chuỗi NLP Token thô"])
+            
+            with tab1:
+                st.write("### 🎯 Kết luận nhãn cuối cùng:")
+                if final_decision == "Spam":
+                    st.error(f"🚨 **HỆ THỐNG DÁN NHÃN: SPAM (TIN NHẮN RÁC)**")
+                else:
+                    st.success(f"✅ **HỆ THỐNG DÁN NHÃN: HAM (AN TOÀN)**")
+                
+                st.write("---")
+                st.write("#### 🔹 Kết quả chi tiết cấu phần:")
+                st.write(f"- Phân loại Naive Bayes: **`{nb_prediction_str.upper()}`** (Độ tự tin: {nb_confidence:.2f}%)")
+                st.write(f"- Không gian Vector DB: **`{knn_prediction_str.upper()}`**")
+            
+            with tab2:
+                if len(neighbors_results) == 0:
+                    st.write("*Không có láng giềng do tin nhắn quá ngắn.*")
+                else:
+                    st.write(f"#### 🔍 Top {k_neighbors} tọa độ Vector láng giềng có độ tương đồng cao nhất:")
+                    for rank, neighbor in enumerate(neighbors_results, 1):
+                        with st.container():
+                            st.write(f"**Top {rank}. Nhãn gốc: `{neighbor['label']}` | Độ khớp Cosine: `{neighbor['score']:.4f}`**")
+                            st.caption(f"Nội dung mẫu: *\"{neighbor['text']}\"*")
+                            st.write("---")
+            
+            with tab3:
+                st.write("#### 👁️ Dữ liệu sau bộ lọc NLP Pipeline:")
+                st.code(processed_input if processed_input.strip() else "[Chuỗi trống]", language="text")
