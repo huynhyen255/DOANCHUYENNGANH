@@ -82,9 +82,9 @@ def initialize_system():
     try:
         df = pd.read_csv(file_path, quotechar='"', quoting=csv.QUOTE_MINIMAL, on_bad_lines='skip', encoding='utf-8')
         
-        # Tự động nhận diện tên cột (Hỗ trợ cả cặp Category/Message hoặc label/text)
+        # SỬA LỖI ĐỔI TÊN CỘT: Thêm tham số inplace=True để áp dụng trực tiếp vào cấu trúc DataFrame gốc
         if 'Category' in df.columns and 'Message' in df.columns:
-            df = df.rename(columns={'Category': 'label', 'Message': 'text'})
+            df.rename(columns={'Category': 'label', 'Message': 'text'}, inplace=True)
         elif 'label' not in df.columns or 'text' not in df.columns:
             return None, "File CSV không đúng định dạng cột quy định (Category/Message hoặc label/text)!"
             
@@ -171,7 +171,7 @@ if btn_click:
                 nb_pred = nb_model.predict(vectorized_nb)[0]
                 nb_prediction_str = str(nb_pred).strip().lower()
                 
-                # SỬA LỖI TRA CỨU INDEX: Chuyển toàn bộ classes_ về list chuỗi thường thuần Python để dò tìm tuyệt đối an toàn
+                # Chuyển đổi an toàn lấy chỉ số nhãn
                 classes_list = [str(c).strip().lower() for c in nb_model.classes_]
                 nb_proba = nb_model.predict_proba(vectorized_nb)[0]
                 
@@ -179,7 +179,7 @@ if btn_click:
                     pred_index = classes_list.index(nb_prediction_str)
                     nb_confidence = nb_proba[pred_index] * 100
                 else:
-                    nb_confidence = 50.0  # Ngưỡng fallback an toàn
+                    nb_confidence = 50.0
                 
                 # === TIẾN TRÌNH 2: TRUY VẤN CƠ SỞ DỮ LIỆU VECTOR ===
                 vectorized_vector_db = tfidf.transform([processed_input]).toarray()
