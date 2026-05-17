@@ -46,7 +46,13 @@ st.write("Đồ án Chuyên Ngành")
 # --- HÀM XỬ LÝ DỮ LIỆU ---
 @st.cache_resource
 def load_trained_model():
-    df = pd.read_csv("2cls_spam_text_cls.csv")
+   df = pd.read_csv(
+    "2cls_spam_text_cls.csv",
+    quotechar='"',                 # Chỉ định dấu ngoặc kép đôi làm ký tự bọc văn bản
+    quoting=csv.QUOTE_MINIMAL,     # Chỉ bọc những trường chứa ký tự đặc biệt
+    on_bad_lines='skip',           # Vẫn giữ phòng hờ để tránh crash nếu lỗi quá nặng
+    encoding='utf-8'
+)
     ps = PorterStemmer()
     
     def preprocess(text):
