@@ -169,15 +169,17 @@ if btn_click:
                 # === TIẾN TRÌNH 1: DỰ ĐOÁN XÁC SUẤT NAIVE BAYES ===
                 vectorized_nb = cv.transform([processed_input]).toarray()
                 nb_pred = nb_model.predict(vectorized_nb)[0]
-                nb_prediction_str = str(nb_pred).strip()
+                nb_prediction_str = str(nb_pred).strip().lower()
                 
-                # SỬA LỖI TÌM VỊ TRÍ AN TOÀN: Dùng vòng lặp quét nhãn trực tiếp tránh lỗi KeyError/ValueError
+                # SỬA LỖI TRA CỨU INDEX: Chuyển toàn bộ classes_ về list chuỗi thường thuần Python để dò tìm tuyệt đối an toàn
+                classes_list = [str(c).strip().lower() for c in nb_model.classes_]
                 nb_proba = nb_model.predict_proba(vectorized_nb)[0]
-                nb_confidence = 50.0  # Mặc định an toàn
-                for idx, cls_label in enumerate(nb_model.classes_):
-                    if str(cls_label).strip().lower() == nb_prediction_str.lower():
-                        nb_confidence = nb_proba[idx] * 100
-                        break
+                
+                if nb_prediction_str in classes_list:
+                    pred_index = classes_list.index(nb_prediction_str)
+                    nb_confidence = nb_proba[pred_index] * 100
+                else:
+                    nb_confidence = 50.0  # Ngưỡng fallback an toàn
                 
                 # === TIẾN TRÌNH 2: TRUY VẤN CƠ SỞ DỮ LIỆU VECTOR ===
                 vectorized_vector_db = tfidf.transform([processed_input]).toarray()
@@ -198,7 +200,7 @@ if btn_click:
                 knn_prediction_str = max(set(neighbor_labels), key=neighbor_labels.count)
                 
                 # MA TRẬN BIỂU QUYẾT TỔNG HỢP
-                if nb_prediction_str.lower() == "spam" or knn_prediction_str.lower() == "spam":
+                if nb_prediction_str == "spam" or knn_prediction_str == "spam":
                     final_decision = "spam"
                 else:
                     final_decision = "ham"
