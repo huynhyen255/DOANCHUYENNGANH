@@ -90,7 +90,7 @@ def initialize_system():
             
         df['processed_text'] = df['text'].apply(preprocess_text)
         
-        # === PHẦN 1: MÔ HÌNH NAIVE BAYES (Xác suất học máy) ===
+        # === PHẦN 1: MÔ HÌNH NAIVE BAYES ===
         cv = CountVectorizer()
         X_nb = cv.fit_transform(df['processed_text']).toarray()
         y_nb = df['label'].values
@@ -169,14 +169,15 @@ if btn_click:
                 # === TIẾN TRÌNH 1: DỰ ĐOÁN XÁC SUẤT NAIVE BAYES ===
                 vectorized_nb = cv.transform([processed_input]).toarray()
                 nb_pred = nb_model.predict(vectorized_nb)[0]
+                nb_prediction_str = str(nb_pred).strip()
                 
-                # Ép kiểu nhãn về dạng chuỗi chuẩn của mô hình
-                nb_prediction_str = str(nb_pred)
-                
+                # SỬA LỖI TÌM VỊ TRÍ AN TOÀN: Dùng vòng lặp quét nhãn trực tiếp tránh lỗi KeyError/ValueError
                 nb_proba = nb_model.predict_proba(vectorized_nb)[0]
-                labels_list = [str(c) for c in nb_model.classes_]
-                pred_index = labels_list.index(nb_prediction_str)
-                nb_confidence = nb_proba[pred_index] * 100
+                nb_confidence = 50.0  # Mặc định an toàn
+                for idx, cls_label in enumerate(nb_model.classes_):
+                    if str(cls_label).strip().lower() == nb_prediction_str.lower():
+                        nb_confidence = nb_proba[idx] * 100
+                        break
                 
                 # === TIẾN TRÌNH 2: TRUY VẤN CƠ SỞ DỮ LIỆU VECTOR ===
                 vectorized_vector_db = tfidf.transform([processed_input]).toarray()
@@ -187,16 +188,16 @@ if btn_click:
                     idx = indices[0][i]
                     score = 1 - distances[0][i] # Cosine Similarity
                     neighbors_results.append({
-                        "label": str(df.iloc[idx]['label']),
+                        "label": str(df.iloc[idx]['label']).strip(),
                         "text": df.iloc[idx]['text'],
                         "score": score
                     })
                 
                 # Biểu quyết số đông từ Vector DB
-                neighbor_labels = [n["label"] for n in neighbors_results]
+                neighbor_labels = [n["label"].lower() for n in neighbors_results]
                 knn_prediction_str = max(set(neighbor_labels), key=neighbor_labels.count)
                 
-                # MA TRẬN BIỂU QUYẾT TỔNG HỢP (So sánh chữ thường để tuyệt đối an toàn)
+                # MA TRẬN BIỂU QUYẾT TỔNG HỢP
                 if nb_prediction_str.lower() == "spam" or knn_prediction_str.lower() == "spam":
                     final_decision = "spam"
                 else:
