@@ -46,10 +46,17 @@ st.write("---")
 # --- HÀM XỬ LÝ DỮ LIỆU & HUẤN LUYỆN SONG SONG ---
 @st.cache_resource
 def load_trained_model():
-df = pd.read_excel("2cls_spam_text_cls.xlsx")
-ps = PorterStemmer()
+    # Sử dụng file Excel để tránh triệt để lỗi "Expected fields" của CSV
+    df = pd.read_excel("2cls_spam_text_cls.xlsx")
+    
+    # Loại bỏ các dòng trống nếu có trong file Excel để tránh lỗi xử lý chuỗi
+    df = df.dropna(subset=["Message", "Category"])
+    
+    ps = PorterStemmer()
     
     def preprocess(text):
+        if pd.isna(text): 
+            return []
         text = str(text).lower().translate(str.maketrans("", "", string.punctuation))
         tokens = nltk.word_tokenize(text)
         stop_words = set(stopwords.words("english"))
