@@ -46,8 +46,8 @@ st.write("---")
 # --- HÀM XỬ LÝ DỮ LIỆU & HUẤN LUYỆN SONG SONG ---
 @st.cache_resource
 def load_trained_model():
-    df = pd.read_csv("2cls_spam_text_cls.csv")
-    ps = PorterStemmer()
+df = pd.read_excel("2cls_spam_text_cls.xlsx")
+ps = PorterStemmer()
     
     def preprocess(text):
         text = str(text).lower().translate(str.maketrans("", "", string.punctuation))
