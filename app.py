@@ -73,6 +73,8 @@ def load_trained_model():
     
     # 1. Khởi tạo & Huấn luyện Naive Bayes
     model = GaussianNB()
+    model.fit(X, y)
+    
     # 2. Khởi tạo & Thiết lập index cho Cơ sở dữ liệu Vector (Sử dụng KNN với Cosine Metric)
     knn_vector_db = NearestNeighbors(n_neighbors=5, metric='cosine')
     knn_vector_db.fit(X)
@@ -134,8 +136,7 @@ if btn_click:
                 })
             
             # Biểu quyết số đông từ kết quả trả về trong cơ sở dữ liệu Vector
-    model.fit(X, y)
-knn_prediction = max(set(knn_labels), key=knn_labels.count)
+            knn_prediction = max(set(knn_labels), key=knn_labels.count)
             
             # --- PHẦN 3: ĐA TẦNG QUYẾT ĐỊNH (HYBRID DECISION PIPELINE) ---
             if confidence < 95 or len(user_input.strip()) < 15:
